@@ -1,0 +1,270 @@
+clear;
+clc;
+close all;
+%pipi储存第一列
+[pprofile,pipi]= xlsread('MEF-to-Neurons.xlsx');
+[empty,network]= xlsread('network2.xlsx');
+[empty,network1]= xlsread('network2.xlsx');
+pprofile=abs(zscore(pprofile));
+
+normal=pprofile(:,1:73);%原92
+mprofile=pprofile(:,1:405);
+edge_s=network(:,1);
+edge_t=network(:,2);
+edge_s1=network1(:,1);
+edge_t1=network1(:,2);
+%unique 筛选重复值，结果按照升序排列  node1中心基因
+node1=unique(network(:,1));
+reference_sample_num=90;
+es=0.00000001;
+patients_num=[73,128,55,33,116];
+
+tempcase(:,1,1:patients_num(1))=mprofile(:,1:73);     % Stage IA 
+tempcase(:,2,1:patients_num(2))=mprofile(:,74:201);   % Stage IB
+tempcase(:,3,1:patients_num(3))=mprofile(:,202:256);   % Stage IIA
+tempcase(:,4,1:patients_num(4))=mprofile(:,257:289);   % Stage IIB
+tempcase(:,5,1:patients_num(5))=mprofile(:,290:405);   % Stage IIA
+
+psize=size(tempcase);
+entropy_land=zeros(length(node1),128,5);
+entropy_land_mix=zeros(length(node1),128,5);
+entropy_land1=zeros(length(node1),128,5);
+entropy_land1_mix=zeros(length(node1),128,5);
+cos1=zeros(length(node1),2);
+stage=5;
+
+for j=1:psize(2)
+    for  k=1:patients_num(j)
+         for na=1:length(node1)    
+             edges_list1=[]; 
+             %判定pipi中的元素是否在node1(na)里面出现，
+             %cencter_idd 若出现length(node2)中元素为1，否为0； cencter_liang中的元素则为在node1(na)出现的索引
+             %find 找非零元素的线性索引值
+             [c_liang1,c_idd1]= find(ismember(pipi,node1(na)));
+             %判定是否为空
+             if isempty(c_liang1)
+                 continue;
+             else
+                 [liang1,n_idd1]= find(ismember(edge_t1,node1(na)));
+                 n_gene1=edge_s1(liang1);
+                 e_=0;
+                 for n=1:length(n_gene1)
+                     [n_liang1,n_idd1]= find(ismember(pipi,n_gene1(n)));
+                     if ~isempty(n_liang1)
+                         e_=e_+1;
+                         edges_list1(e_,:)=[c_liang1 n_liang1];
+                     end
+                 end
+                 [liang1_1,ni_idd1_1]= find(ismember(edge_s1,node1(na)));
+                 n_gene1_1=edge_t1(liang1_1);
+                 e1_1=0;
+                 for n=1:length(n_gene1_1)
+                     [n_liang1_1,n_idd1_1]= find(ismember(pipi,n_gene1_1(n)));
+                     if ~isempty(n_liang1_1)
+                         e1_1=e1_1+1;
+                         edges_list1_1(e1_1,:)=[c_liang1 n_liang1_1];
+                     end
+                 end
+             end
+            if e_<2
+                continue;
+            end
+            for i=1:e_
+                n_pcc1=abs(corr(normal(edges_list1(i,1),:)',normal(edges_list1(i,2),:)'));
+                t_add_onecase1=[normal(edges_list1(i,1),:),reshape(tempcase(edges_list1(i,1),j,k),1,1)];
+                t_add_onecase2=[normal(edges_list1(i,2),:),reshape(tempcase(edges_list1(i,2),j,k),1,1)];
+                pcc_add_onecase=abs(corr(t_add_onecase1',t_add_onecase2'));
+                delt1=abs(pcc_add_onecase-n_pcc1);
+                p_val1=SNN(delt1,n_pcc1,reference_sample_num);
+            end  
+            if e1_1<2
+                continue;
+            end
+            for i=1:e1_1
+                n_pcc1_1=abs(corr(normal(edges_list1_1(i,1),:)',normal(edges_list1_1(i,2),:)'));
+                t_add_onecase_1=[normal(edges_list1_1(i,1),:),reshape(tempcase(edges_list1_1(i,1),j,k),1,1)];
+                t_add_onecase_2=[normal(edges_list1_1(i,2),:),reshape(tempcase(edges_list1_1(i,2),j,k),1,1)];
+                pcc1_add_onecase=abs(corr(t_add_onecase_1',t_add_onecase_2'));
+                delt1_1=abs(pcc1_add_onecase-n_pcc1_1);
+                p_val1_1=SNN(delt1_1,n_pcc1_1,reference_sample_num);
+            end
+              %计算交叉强度
+              cos=1/5*p_val1+4/5*p_val1_1;
+              cos1(na,2)=cos;
+         end 
+              
+    end
+     j
+end
+% save 67310.mat;
+% load('67310.mat');
+
+[JQ2,idx]=sort(cos1,1,'descend');
+%快捷缩进 crtl+i
+cos3=idx(1:2236,2);
+edge_target3=node1(cos3(1:2000));
+[liang2,idx1]= find(ismember(edge_t,edge_target3));
+network2=network(liang2,1:2);
+
+edge_s1=network2(:,1);
+edge_t1=network2(:,2);
+node2=unique(network2(:,1));
+for j=1:psize(2)
+    for  k=1:patients_num(j)
+         for na=1:length(node2)
+             edges_list=[];
+             [c_liang,c_idd]= find(ismember(pipi,node2(na)));
+             if isempty(c_liang)
+                 entropy_land(na,k,j)=0;
+                 entropy_land1(na,k,j)=0;
+                 continue;
+             else
+                 %指出
+                 [liang,n_idd]= find(ismember(edge_s1,node2(na)));
+                 n_gene=edge_t1(liang);
+ 
+                 e=0;
+                 %一阶出度邻域
+                 for n=1:length(n_gene)
+                     [n_liang,ni_idd]= find(ismember(pipi,n_gene(n)));
+                     if ~isempty(n_liang)
+                         e=e+1;
+                         edges_list(e,:)=[c_liang n_liang];
+                     end
+                 end
+                 %指入
+                 [liang_1,n_idd_1]= find(ismember(edge_t1,node2(na)));
+                 n_gene_1=edge_s1(liang_1);
+                 e1=0;
+                 %一阶入度邻域
+                 for n=1:length(n_gene_1)
+                     [n_liang_1,ni_idd_1]= find(ismember(pipi,n_gene_1(n)));
+                     if ~isempty(n_liang_1)
+                         e1=e1+1;
+                         edges_list_1(e1,:)=[c_liang n_liang_1];
+                     end
+                 end
+             end
+%             if e<2
+%                 continue;
+%             end
+            delt_pcc=[];
+            nn=0;
+            for i=1:e
+                n_pcc=1/2.*(1+abs(corr(normal(edges_list(i,1),:)',normal(edges_list(i,2),:)')));
+                t_add_onecase1=[normal(edges_list(i,1),:),reshape(tempcase(edges_list(i,1),j,k),1,1)];
+                t_add_onecase2=[normal(edges_list(i,2),:),reshape(tempcase(edges_list(i,2),j,k),1,1)];
+                pcc_add_onecase=abs(corr(t_add_onecase1',t_add_onecase2'));
+                delt=abs(pcc_add_onecase-n_pcc);
+%                 p_val=SNN(delt,curr_pcc,reference_sample_num);
+%                 if p_val<1
+                if delt~=0
+                     nn=nn+1;
+                     delt_pcc(nn)=delt;
+                end
+            end
+            
+            delt_pcc_1=[];
+            nn_1=0;
+            for i=1:e1
+                n_pcc_1=1/2.*(1+abs(corr(normal(edges_list_1(i,1),:)',normal(edges_list_1(i,2),:)')));
+                t_add_onecase_1=[normal(edges_list_1(i,1),:),reshape(tempcase(edges_list_1(i,1),j,k),1,1)];
+                t_add_onecase_2=[normal(edges_list_1(i,2),:),reshape(tempcase(edges_list_1(i,2),j,k),1,1)];
+                pcc1_add_onecase=abs(corr(t_add_onecase_1',t_add_onecase_2'));
+                delt_1=abs(pcc1_add_onecase-n_pcc_1); 
+%                 p_val_1=SNN(delt_1,curr_pcc_1,reference_sample_num);
+%                 if  p_val_1<1
+                if  delt_1~=0
+                     nn_1=nn_1+1;
+                     delt_pcc_1(nn_1)=delt_1;
+                end
+            end      
+            if isempty(delt_pcc) || (length(delt_pcc)==1)
+                entropy_land(na,k,j)=0;
+            else
+                delt_pcc=delt_pcc/(sum(delt_pcc)+es);
+                entropy_land(na,k,j)=-(1/length(delt_pcc))*sum(tempcase(na,k).*delt_pcc.*log(tempcase(na,k).*delt_pcc+es));
+            end        
+       for n=1:length(n_gene_1)
+            if isempty(delt_pcc_1) || (length(delt_pcc_1)==1)
+                entropy_land1(na,k,j)=0;  
+            else
+                delt_pcc_1=delt_pcc_1/(sum(delt_pcc_1)+es);
+                entropy_land1(na,k,j)=-(1/length(delt_pcc_1))*sum(tempcase(n,k).*delt_pcc_1.*log(tempcase(n,k).*delt_pcc_1+es));
+             end
+      end
+         end    
+    end
+    j
+end
+%save 67310最终).mat; 
+%load 67310.mat;
+mix_Land_entropy=entropy_land+entropy_land1;
+mix_Land_entropy=mix_Land_entropy;
+
+% A=mix_Land_entropy(1:1932,1:73,1);
+% B=mix_Land_entropy(1:1932,1:128,2);
+% C=mix_Land_entropy(1:1932,1:55,3);
+% D=mix_Land_entropy(1:1932,1:33,4);
+% E=mix_Land_entropy(1:1932,1:116,5);
+% xlswrite('case_result21.xls',A,'sheet1');
+% xlswrite('case_result22.xls',B,'sheet2');
+% xlswrite('case_result23.xls',C,'sheet3');
+% xlswrite('case_result24.xls',D,'sheet4');
+% xlswrite('case_result25.xls',E,'sheet5');
+
+Land_entropy_size=size(mix_Land_entropy);
+case_result=zeros(128,5);
+case_result1=zeros(length(node2),5);
+%case_result3=zeros(length(node2),139);
+
+%%%%
+for t=1:Land_entropy_size(3)
+        for case_num=1:patients_num(t)
+            for na=1:length(node2)
+                [sort_Land_entrop,idx2]=sort(mix_Land_entropy(:,case_num,t),'descend');
+                case_result(case_num,t)=sum(sort_Land_entrop(1:Land_entropy_size(1)));
+                sort_Land_entrop2 = mix_Land_entropy(na,:,t);
+                case_result1(na,t)=sum(sort_Land_entrop2(1:Land_entropy_size(2)));
+                case_result2(na,t)=case_result1(na,t)./patients_num(t);
+            end
+        end
+          %result(t)=mean(case_result(1:patients_num(t),t));
+          result(t)=mean(case_result2(1:length(node2),t));
+end
+result=result/sum(result);
+
+% load 67310(最终).mat;
+case_result4=sort(case_result2,1,'descend');
+%选取DNB
+case_result11=case_result4(1:100,:);
+% %基因在各阶段
+%xlswrite('gene.xlsx',case_result2);
+% %基因在各样本
+% xlswrite('case_result4.xlsx',case_result4);
+
+figure;
+t=[1 2 3 4 5];
+plot(t,result,'r','LineWidth',3);
+set(gca,'XTick',1:5);
+B={'0h'  '2h'  '5h' '20h' '22h'};
+set(gca,'XTickLabel',B);
+% ylim([33,44])
+% set(gca,'Ylim',[33 44]);
+% set(gca,'YTick',[0.08:0.01:0.1]);
+xlabel('Stages');
+ylabel('Score');
+%plot(t,aver_comidx,'r','LineWidth',3);
+title('The DNFE of MEF-to-Neurons');
+
+
+figure('NumberTitle', 'off', 'Name','The G-score landscape of DNB');
+surf([1:size(abs(case_result11),2)],[1:size(abs(case_result11),1)],abs(case_result11));
+set(gca,'XTick',1:5);
+B={'0h'  '2h'  '5h' '20h' '22h'};
+set(gca,'XTickLabel',B);
+xlabel('Time');
+ylabel('Gene');
+zlabel('DNFE score');
+title('The global DNFE score for MEF-to-Neurons');
+shading interp;
